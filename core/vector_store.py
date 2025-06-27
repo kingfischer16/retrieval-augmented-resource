@@ -43,7 +43,7 @@ from langchain.tools.retriever import create_retriever_tool
 
 # Custom imports
 from core.utils import get_or_create_app_dir, add_vector_store_to_registry
-from core.config import CHUNK_SIZE, CHUNK_OVERLAP
+from core.config import CHUNK_SIZE, CHUNK_OVERLAP, DEFAULT_RETRIEVAL_K
 from core.models import embedding_model
 
 # Constants
@@ -507,7 +507,7 @@ def get_retriever_from_vector_store(
     
     # Set default search kwargs if not provided
     if search_kwargs is None:
-        search_kwargs = {"k": 4}  # Default to returning top 4 documents
+        search_kwargs = {"k": DEFAULT_RETRIEVAL_K}  # Default to returning top documents from config
     
     try:
         # Load the existing vector store with the same embedding model used during creation

@@ -13,6 +13,8 @@
 
 **Retrieval-Augmented Resource (RAR)** is a CLI application that bridges the gap between your documents and AI-powered conversations. It transforms static files into dynamic, queryable knowledge bases using cutting-edge RAG technology.
 
+> 🎓 **Learning Project**: This repository was created as a self-directed learning project to explore LangChain, Google Gemini, and agentic AI system development. It serves as both a functional tool and an educational resource for understanding modern RAG implementations.
+
 ### ✨ Key Features
 
 - **🔍 Multi-Format Support**: PDF, TXT, MD, CSV, HTML, JSON, DOCX

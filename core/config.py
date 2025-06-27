@@ -20,3 +20,4 @@ CHAT_MODEL_THINKING_BUDGET = 0  # Thinking budget for the chat model, controllin
 # Vector store settings
 CHUNK_SIZE = 1000  # Default chunk size for text splitting
 CHUNK_OVERLAP = 200  # Default chunk overlap for text splitting
+DEFAULT_RETRIEVAL_K = 6  # Default number of documents to retrieve for similarity search
