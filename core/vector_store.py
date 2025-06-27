@@ -38,7 +38,7 @@ from langchain_text_splitters import (
     TokenTextSplitter
 )
 from langchain_core.vectorstores import VectorStoreRetriever
-from langchain.vectorstores import Chroma
+from langchain_chroma import Chroma
 from langchain.tools.retriever import create_retriever_tool
 
 # Custom imports

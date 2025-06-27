@@ -9,6 +9,7 @@ langchain-google-genai>=1.0.0
 
 # Vector store (Chroma)
 chromadb>=0.4.0
+langchain-chroma>=0.1.0
 
 # Document loaders
 unstructured>=0.11.0
