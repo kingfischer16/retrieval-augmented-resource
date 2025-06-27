@@ -14,7 +14,7 @@ from langchain_google_genai import GoogleGenerativeAIEmbeddings, ChatGoogleGener
 from core.config import (
     GEMINI_EMBEDDING_MODEL_NAME, 
     GEMINI_CHAT_MODEL_NAME,
-    CHAT_MODEL_TEMPERATEURE,
+    CHAT_MODEL_TEMPERATURE,
     CHAT_MODEL_THINKING_BUDGET
 )
 
@@ -22,7 +22,7 @@ from core.config import (
 # This model is used for generating chat responses based on user input
 chat_model = ChatGoogleGenerativeAI(
     model=GEMINI_CHAT_MODEL_NAME, 
-    temperature=CHAT_MODEL_TEMPERATEURE, 
+    temperature=CHAT_MODEL_TEMPERATURE, 
     thinking_budget=CHAT_MODEL_THINKING_BUDGET, 
     verbose=False
 )

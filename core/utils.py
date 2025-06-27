@@ -2,7 +2,7 @@
 utils.py
 ########
 
-Utility functions for the application, inlcuding setup.
+Utility functions for the application, inlcuding setup and registry management for vector stores.
 """
 
 # Imports
@@ -10,7 +10,8 @@ import os
 import sys
 import json
 from pathlib import Path
-from typing import Dict, List, Optional, Any
+from typing import Dict, List, Any
+from langchain_core.documents import Document
 
 RAR_APP_NAME = "RetrievalAugmentedResource"
 
@@ -134,7 +135,8 @@ def add_vector_store_to_registry(
     name: str,
     collection_name: str,
     persist_directory: str,
-    description: str = ""
+    description: str = "",
+    debug: bool = False
 ) -> bool:
     """
     Add a new vector store to the registry.
@@ -144,11 +146,17 @@ def add_vector_store_to_registry(
         collection_name: Name of the collection in the vector database
         persist_directory: Directory where the vector store is persisted
         description: Optional description
+        debug: Whether to show debug output
         
     Returns:
         bool: True if successful, False otherwise.
     """
+    if debug:
+        print(f"Adding vector store '{name}' to registry...")
+    
     registry = load_vector_store_registry()
+    if debug:
+        print(f"Current registry has {len(registry.get('stores', {}))} stores")
     
     store_entry = {
         "collection_name": collection_name,
@@ -157,22 +165,32 @@ def add_vector_store_to_registry(
     }
     
     registry["stores"][name] = store_entry
-    return save_vector_store_registry(registry)
+    success = save_vector_store_registry(registry)
+    
+    if success:
+        if debug:
+            print(f"Successfully added '{name}' to registry")
+            # Verify by reloading
+            updated_registry = load_vector_store_registry()
+            print(f"Updated registry now has {len(updated_registry.get('stores', {}))} stores")
+    else:
+        if debug:
+            print(f"Failed to save '{name}' to registry")
+    
+    return success
 
-def list_vector_stores() -> List[Dict[str, Any]]:
+def list_vector_stores() -> Dict[str, Dict[str, Any]]:
     """
-    List all vector stores in the registry for user selection.
+    List all vector stores in the registry.
     
     Returns:
-        List: List of store entries with their names included, sorted by name.
+        Dict: Dictionary with store names as keys and store data as values.
     """
     registry = load_vector_store_registry()
-    stores = []
-    
-    for name, store_data in registry["stores"].items():
-        store_with_name = {"name": name, **store_data}
-        stores.append(store_with_name)
-    
-    # Sort by name for easy user selection
-    stores.sort(key=lambda x: x.get("name", "").lower())
-    return stores
+    return registry.get("stores", {})
+
+def format_docs(docs: list[Document]) -> str:
+    """
+    Combine the page_content of retrieved documents into a single string.
+    """
+    return "\n\n".join(doc.page_content for doc in docs)

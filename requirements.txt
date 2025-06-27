@@ -1,0 +1,22 @@
+# Core LangChain dependencies
+langchain>=0.1.0
+langchain-community>=0.0.10
+langchain-core>=0.1.0
+langchain-text-splitters>=0.0.1
+
+# Google Gemini integration
+langchain-google-genai>=1.0.0
+
+# Vector store (Chroma)
+chromadb>=0.4.0
+
+# Document loaders
+unstructured>=0.11.0
+pypdf>=3.17.0
+
+# Additional dependencies for file processing
+python-magic-bin>=0.4.14; platform_system=="Windows"
+python-magic>=0.4.27; platform_system!="Windows"
+
+# Optional: For better performance
+faiss-cpu>=1.7.4

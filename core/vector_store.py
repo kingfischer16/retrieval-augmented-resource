@@ -39,6 +39,7 @@ from langchain_text_splitters import (
 )
 from langchain_core.vectorstores import VectorStoreRetriever
 from langchain.vectorstores import Chroma
+from langchain.tools.retriever import create_retriever_tool
 
 # Custom imports
 from core.utils import get_or_create_app_dir, add_vector_store_to_registry
@@ -247,7 +248,8 @@ def create_vector_store(
     store_name: str,
     description: str,
     collection_name: str,
-    text_splitter: Literal["recursive", "token"] = "recursive"
+    text_splitter: Literal["recursive", "token"] = "recursive",
+    debug: bool = False
     ) -> None:
     """
     Provided a file or folder path, this function will create a new vector store in the app data cache directory.
@@ -350,7 +352,8 @@ def create_vector_store(
         name=store_name,
         collection_name=collection_name,
         persist_directory=persist_directory,
-        description=description
+        description=description,
+        debug=debug
     )
     
     if success:
@@ -432,3 +435,43 @@ def get_retriever_from_vector_store(
     except Exception as e:
         print(f"Error loading vector store '{collection_name}': {str(e)}")
         raise
+
+def create_retriever_tool_from_vector_store(
+    collection_name: str,
+    persist_directory: str,
+    store_name: str,
+    search_type: str = "similarity",
+    search_kwargs: dict = None
+) -> object:
+    """
+    Create a retriever tool from a vector store that an agent can use.
+    
+    This function gets a retriever from the vector store and wraps it as a tool
+    that can be used by LangChain agents.
+    
+    Args:
+        collection_name: The name of the collection to retrieve from
+        persist_directory: The directory where the vector store is persisted
+        store_name: The name of the vector store for tool description
+        search_type: The type of search to perform
+        search_kwargs: Additional search parameters
+        
+    Returns:
+        A LangChain tool that the agent can use to search the vector store
+    """
+    from core.prompts import RETRIEVER_TOOL_DESCRIPTION
+    
+    # Get the retriever
+    retriever = get_retriever_from_vector_store(
+        collection_name=collection_name,
+        persist_directory=persist_directory,
+        search_type=search_type,
+        search_kwargs=search_kwargs
+    )
+    
+    # Create and return the tool
+    return create_retriever_tool(
+        retriever=retriever,
+        name="search_knowledge_base",
+        description=f"Search the {store_name} knowledge base. {RETRIEVER_TOOL_DESCRIPTION}"
+    )
