@@ -65,7 +65,7 @@ def get_or_create_cache_dir() -> str:
         print(f"Data cache directory already exists at: {data_dir}")
     return str(data_dir)
 
-def build_document_list_from_folder(folder_path: str) -> tuple[bool, list]:
+def build_document_list_from_folder(folder_path: str, max_files: int = None) -> tuple[bool, list]:
     """
     Build a list of documents from a folder path using DirectoryLoader. 
 
@@ -110,26 +110,80 @@ def build_document_list_from_folder(folder_path: str) -> tuple[bool, list]:
         # Load documents for each file pattern
         for pattern in glob_patterns:
             try:
-                loader = DirectoryLoader(
-                    path=str(folder),
-                    glob=pattern,
-                    recursive=True,
-                    show_progress=True,
-                    use_multithreading=True
-                )
-                documents = loader.load()
-                if documents:
-                    all_documents.extend(documents)
-                    print(f"Loaded {len(documents)} document(s) matching pattern '{pattern}'")
+                print(f"Searching for files matching pattern: {pattern}")
+                
+                # First, get the list of files matching the pattern
+                matching_files = list(folder.rglob(pattern.replace("**/", "")))
+                
+                if not matching_files:
+                    continue
+                
+                # Apply file limit if specified
+                if max_files and len(all_documents) >= max_files:
+                    print(f"Reached maximum file limit ({max_files}), stopping file processing.")
+                    break
+                
+                # Limit the files for this pattern if needed
+                remaining_slots = max_files - len(all_documents) if max_files else len(matching_files)
+                if max_files:
+                    matching_files = matching_files[:remaining_slots]
+                
+                print(f"Found {len(matching_files)} files matching {pattern} (processing {len(matching_files)})")
+                
+                # Process files in smaller batches to avoid memory issues
+                batch_size = 50  # Process 50 files at a time
+                total_batches = (len(matching_files) + batch_size - 1) // batch_size
+                
+                for batch_idx in range(total_batches):
+                    start_idx = batch_idx * batch_size
+                    end_idx = min((batch_idx + 1) * batch_size, len(matching_files))
+                    batch_files = matching_files[start_idx:end_idx]
+                    
+                    print(f"Processing batch {batch_idx + 1}/{total_batches} ({len(batch_files)} files)...")
+                    
+                    # Process each file individually to avoid memory issues
+                    batch_documents = []
+                    for file_path in batch_files:
+                        try:
+                            # Use the individual file loader for better control
+                            success, file_docs = build_document_list_from_file(str(file_path))
+                            if success and file_docs:
+                                batch_documents.extend(file_docs)
+                            
+                            # Check if we've reached the file limit
+                            if max_files and len(all_documents) + len(batch_documents) >= max_files:
+                                print(f"Reached maximum file limit ({max_files}), stopping.")
+                                break
+                                
+                        except Exception as e:
+                            print(f"Warning: Failed to load {file_path}: {str(e)}")
+                            continue
+                    
+                    if batch_documents:
+                        all_documents.extend(batch_documents)
+                        print(f"Loaded {len(batch_documents)} documents from batch {batch_idx + 1} (total: {len(all_documents)})")
+                    
+                    # Check if we've reached the limit
+                    if max_files and len(all_documents) >= max_files:
+                        break
+                    
+                    # Optional: Add a small delay to prevent overwhelming the system
+                    import time
+                    time.sleep(0.1)
+                
+                # Break out of pattern loop if we've reached the limit
+                if max_files and len(all_documents) >= max_files:
+                    break
+                        
             except Exception as e:
-                print(f"Warning: Failed to load files matching pattern '{pattern}': {str(e)}")
+                print(f"Warning: Failed to process files matching pattern '{pattern}': {str(e)}")
                 continue
         
         if not all_documents:
             print(f"No supported documents found in '{folder_path}' or its subdirectories.")
             return False, []
         
-        print(f"Total documents loaded recursively: {len(all_documents)}")
+        print(f"Total documents loaded: {len(all_documents)}")
         return True, all_documents
         
     except Exception as e:
@@ -207,7 +261,7 @@ def build_document_list_from_file(file_path: str) -> tuple[bool, list]:
         print(f"Error: Failed to load document from '{file_path}': {str(e)}")
         return False, []
 
-def build_document_list(file_or_folder_path: str) -> tuple[bool, list]:
+def build_document_list(file_or_folder_path: str, max_files: int = None) -> tuple[bool, list]:
     """
     Build a list of documents from a file or folder path as provided by the user.
 
@@ -238,7 +292,7 @@ def build_document_list(file_or_folder_path: str) -> tuple[bool, list]:
         return build_document_list_from_file(file_or_folder_path)
     elif path.is_dir():
         print(f"Processing folder: {path.name}")
-        return build_document_list_from_folder(file_or_folder_path)
+        return build_document_list_from_folder(file_or_folder_path, max_files)
     else:
         print(f"Error: The path '{file_or_folder_path}' is neither a file nor a directory.")
         return False, []
@@ -249,7 +303,8 @@ def create_vector_store(
     description: str,
     collection_name: str,
     text_splitter: Literal["recursive", "token"] = "recursive",
-    debug: bool = False
+    debug: bool = False,
+    max_files: int = None
     ) -> None:
     """
     Provided a file or folder path, this function will create a new vector store in the app data cache directory.
@@ -275,7 +330,12 @@ def create_vector_store(
     print(f"Creating vector store '{store_name}' from '{file_or_folder_path}'...")
     
     # Step 1: Load documents from the provided path
-    success, documents = build_document_list(file_or_folder_path)
+    print("Step 1: Loading documents...")
+    try:
+        success, documents = build_document_list(file_or_folder_path, max_files)
+    except Exception as e:
+        print(f"Error during document loading: {str(e)}")
+        return
     
     if not success or not documents:
         print(f"Error: Failed to load documents from '{file_or_folder_path}'. Vector store creation aborted.")
@@ -283,7 +343,13 @@ def create_vector_store(
     
     print(f"Loaded {len(documents)} documents successfully.")
     
+    # Check if we have too many documents and warn the user
+    if len(documents) > 1000:
+        print(f"Warning: Processing {len(documents)} documents. This may take a while and use significant API quota.")
+        print("Consider processing smaller batches or using a subset of files.")
+    
     # Step 2: Set up text splitter based on user choice
+    print("Step 2: Setting up text splitter...")
     if text_splitter == "recursive":
         splitter = RecursiveCharacterTextSplitter(
             chunk_size=CHUNK_SIZE,
@@ -304,16 +370,22 @@ def create_vector_store(
         )
     
     # Step 3: Split documents into chunks
-    print(f"Splitting documents using '{text_splitter}' splitter...")
+    print(f"Step 3: Splitting documents using '{text_splitter}' splitter...")
     try:
         texts = splitter.split_documents(documents)
         print(f"Created {len(texts)} text chunks from {len(documents)} documents.")
+        
+        # Warn about large chunk counts
+        if len(texts) > 10000:
+            print(f"Warning: {len(texts)} chunks will be processed. This may take a very long time.")
+            print("Consider using larger chunk sizes or processing fewer documents.")
+            
     except Exception as e:
         print(f"Error: Failed to split documents: {e}")
         return
     
     # Step 4: Set up embeddings using the custom embedding model
-    print("Setting up embeddings...")
+    print("Step 4: Setting up embeddings...")
     try:
         embeddings = embedding_model
     except Exception as e:
@@ -321,22 +393,56 @@ def create_vector_store(
         return
     
     # Step 5: Create persist directory
-    cache_dir = get_or_create_cache_dir()
-    persist_directory = str(Path(cache_dir) / "chroma_db" / collection_name)
-    
-    # Create the directory if it doesn't exist
-    Path(persist_directory).mkdir(parents=True, exist_ok=True)
-    print(f"Vector store will be persisted to: {persist_directory}")
+    print("Step 5: Creating persist directory...")
+    try:
+        cache_dir = get_or_create_cache_dir()
+        persist_directory = str(Path(cache_dir) / "chroma_db" / collection_name)
+        
+        # Create the directory if it doesn't exist
+        Path(persist_directory).mkdir(parents=True, exist_ok=True)
+        print(f"Vector store will be persisted to: {persist_directory}")
+    except Exception as e:
+        print(f"Error: Failed to create persist directory: {e}")
+        return
     
     # Step 6: Create vector store
-    print("Creating vector store with embeddings...")
+    print("Step 6: Creating vector store with embeddings...")
+    print("This may take a while depending on the number of chunks and API rate limits...")
     try:
-        vector_store = Chroma.from_documents(
-            documents=texts,
-            embedding=embeddings,
-            collection_name=collection_name,
-            persist_directory=persist_directory
-        )
+        # Process in smaller batches to avoid overwhelming the API
+        batch_size = 100  # Process 100 chunks at a time
+        total_batches = (len(texts) + batch_size - 1) // batch_size
+        
+        if len(texts) > batch_size:
+            print(f"Processing {len(texts)} chunks in {total_batches} batches of {batch_size}...")
+            
+            # Create vector store with first batch
+            first_batch = texts[:batch_size]
+            vector_store = Chroma.from_documents(
+                documents=first_batch,
+                embedding=embeddings,
+                collection_name=collection_name,
+                persist_directory=persist_directory
+            )
+            print(f"Processed batch 1/{total_batches} ({len(first_batch)} chunks)")
+            
+            # Add remaining batches
+            for i in range(1, total_batches):
+                start_idx = i * batch_size
+                end_idx = min((i + 1) * batch_size, len(texts))
+                batch = texts[start_idx:end_idx]
+                
+                print(f"Processing batch {i+1}/{total_batches} ({len(batch)} chunks)...")
+                vector_store.add_documents(batch)
+                print(f"Completed batch {i+1}/{total_batches}")
+        else:
+            # Small number of documents, process all at once
+            vector_store = Chroma.from_documents(
+                documents=texts,
+                embedding=embeddings,
+                collection_name=collection_name,
+                persist_directory=persist_directory
+            )
         
         # Persist the vector store
         vector_store.persist()
@@ -344,6 +450,7 @@ def create_vector_store(
         
     except Exception as e:
         print(f"Error: Failed to create vector store: {e}")
+        print(f"Error details: {type(e).__name__}: {str(e)}")
         return
     
     # Step 7: Register the vector store in the registry

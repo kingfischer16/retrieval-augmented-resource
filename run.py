@@ -156,6 +156,46 @@ def create_new_vector_store():
     print(f"Description: {description}")
     print()
     
+    # Check if it's a directory with many files
+    if path_obj.is_dir():
+        try:
+            # Count files in directory
+            file_count = sum(1 for file in path_obj.rglob('*') if file.is_file())
+            print(f"Directory contains {file_count} files.")
+            
+            if file_count > 500:
+                print(f"{Colors.YELLOW}Warning: Processing {file_count} files may take a very long time and use significant API quota.{Colors.END}")
+                print(f"{Colors.YELLOW}Consider processing a smaller subset first.{Colors.END}")
+                
+                # Offer option to limit the number of files
+                limit_files = get_user_input("Do you want to limit the number of files? (y/N): ", Colors.YELLOW).strip().lower()
+                if limit_files in ['y', 'yes']:
+                    while True:
+                        try:
+                            max_files = int(get_user_input("Enter maximum number of files to process: ", Colors.YELLOW).strip())
+                            if max_files > 0:
+                                break
+                            else:
+                                print_error("Please enter a positive number.")
+                        except ValueError:
+                            print_error("Please enter a valid number.")
+                    
+                    print(f"Will process only the first {max_files} files found.")
+                    # We'll pass this limit to the vector store creation function
+                else:
+                    confirm = get_user_input("Do you want to continue with all files? (y/N): ", Colors.YELLOW).strip().lower()
+                    if confirm not in ['y', 'yes']:
+                        print("Vector store creation cancelled.")
+                        input(f"\n{Colors.YELLOW}Press Enter to return to main menu...{Colors.END}")
+                        return
+                    max_files = None
+            else:
+                max_files = None
+        except Exception:
+            max_files = None  # If we can't count files, just proceed
+    else:
+        max_files = None
+    
     try:
         # Create the vector store
         create_vector_store(
@@ -164,13 +204,20 @@ def create_new_vector_store():
             description=description,
             collection_name=collection_name,
             text_splitter="recursive",  # Default to recursive splitter
-            debug=DEBUG_MODE
+            debug=DEBUG_MODE,
+            max_files=max_files if 'max_files' in locals() else None
         )
         
         print_success(f"Vector store '{store_name}' created successfully!")
         
+    except KeyboardInterrupt:
+        print_error("Vector store creation was interrupted by user.")
     except Exception as e:
         print_error(f"Failed to create vector store: {str(e)}")
+        if DEBUG_MODE:
+            import traceback
+            print(f"\n{Colors.RED}Full error traceback:{Colors.END}")
+            traceback.print_exc()
     
     input(f"\n{Colors.YELLOW}Press Enter to return to main menu...{Colors.END}")
 
