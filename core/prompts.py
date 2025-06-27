@@ -6,13 +6,6 @@ Collection of prompts used in the application.
 
 """
 
-# Prompt for chatting with an expert in the field of the vector store's data.
-EXPERT_CHAT_PROMPT = """You are an expert in the field of the data provided. 
-Your task is to answer questions based on the information provided, and please provide 
-concise and accurate answers to the user's questions.
-You have access to the following data:  {context}
-"""
-
 # Agent system prompt for agentic RAG
 AGENT_SYSTEM_PROMPT = """You are an expert assistant with access to a knowledge base.
 
