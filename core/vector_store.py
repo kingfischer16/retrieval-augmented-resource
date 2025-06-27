@@ -444,9 +444,7 @@ def create_vector_store(
                 persist_directory=persist_directory
             )
         
-        # Persist the vector store
-        vector_store.persist()
-        print(f"Vector store created and persisted successfully!")
+        print(f"Vector store created successfully!")
         
     except Exception as e:
         print(f"Error: Failed to create vector store: {e}")
