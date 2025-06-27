@@ -4,3 +4,21 @@
 
 # LangGraph
 .langgraph_api/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.pdb
+*.egg-info/
+*.eggs/
+*.whl
+*.dist-info/
+
+# Jupyter Notebook
+.ipynb_checkpoints/
+
+# VS Code
+.vscode/
+.vscode-test/
