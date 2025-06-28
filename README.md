@@ -11,45 +11,45 @@
 
 ## 🚀 What is RAR?
 
-**Retrieval-Augmented Resource (RAR)** is a CLI application that bridges the gap between your documents and AI-powered conversations. It transforms static files into dynamic, queryable knowledge bases using cutting-edge RAG technology.
+**Retrieval-Augmented Resource (RAR)** is a simple CLI application that lets you chat with your documents using AI. It converts your files into searchable knowledge bases using RAG (Retrieval-Augmented Generation) technology.
 
 > 🎓 **Learning Project**: This repository was created as a self-directed learning project to explore LangChain, Google Gemini, and agentic AI system development. It serves as both a functional tool and an educational resource for understanding modern RAG implementations.
 
 ### ✨ Key Features
 
 - **🔍 Multi-Format Support**: PDF, TXT, MD, CSV, HTML, JSON, DOCX
-- **🧠 Intelligent Chunking**: Advanced text splitting with configurable overlap
-- **⚡ Vector Search**: Lightning-fast semantic search using ChromaDB
+- **🧠 Text Chunking**: Splits documents with configurable overlap
+- **⚡ Vector Search**: Semantic search using ChromaDB
 - **🤖 Conversational AI**: Natural language querying with Google Gemini
-- **🎨 Beautiful CLI**: Color-coded interface with progress tracking
-- **🔧 Debug Mode**: Transparent operation with detailed logging
-- **📁 Batch Processing**: Handle thousands of files efficiently
-- **💾 Persistent Storage**: Your knowledge bases are saved locally
+- **🎨 Clean CLI**: Color-coded interface with progress tracking
+- **🔧 Debug Mode**: See what's happening under the hood
+- **📁 Batch Processing**: Handle multiple files at once
+- **💾 Local Storage**: Your knowledge bases are saved locally
 
 ---
 
 ## 🎯 Use Cases
 
 ### 📚 **Research & Academia**
-Transform research papers, lecture notes, and academic resources into a queryable knowledge assistant.
+Turn research papers, notes, and academic resources into a searchable knowledge base.
 
-### 💼 **Business Intelligence**
-Convert company documents, reports, and policies into an intelligent corporate knowledge base.
+### 💼 **Business Documents**
+Convert company documents, reports, and policies into a queryable system.
 
-### 📖 **Documentation Management**
-Turn technical documentation, manuals, and guides into an interactive help system.
+### 📖 **Documentation**
+Make technical documentation, manuals, and guides easier to search through.
 
 ### 🎮 **Content Analysis**
-Analyze large collections of transcripts, articles, or creative content for insights and patterns.
+Search through collections of articles, transcripts, or other text content.
 
-### 🔍 **Legal Research**
-Query legal documents, case studies, and regulations with natural language.
+### 🔍 **Document Search**
+Query documents, case studies, and reports with natural language.
 
 ---
 
 ## 🏗️ How It Works
 
-RAR employs a sophisticated **Retrieval-Augmented Generation (RAG)** pipeline:
+RAR uses a straightforward **Retrieval-Augmented Generation (RAG)** approach:
 
 ```mermaid
 graph LR
@@ -60,12 +60,12 @@ graph LR
     E --> F[🤖 AI Response]
 ```
 
-1. **Document Ingestion**: Load and parse various file formats
-2. **Intelligent Chunking**: Split text into semantically meaningful segments
-3. **Vector Embeddings**: Convert text chunks into high-dimensional vectors
-4. **Vector Storage**: Store embeddings in ChromaDB for fast retrieval
-5. **Semantic Search**: Find relevant content based on query similarity
-6. **AI Generation**: Use Gemini to generate contextual responses
+1. **Document Loading**: Load and parse various file formats
+2. **Text Chunking**: Split text into smaller, manageable segments
+3. **Vector Embeddings**: Convert text chunks into searchable vectors
+4. **Vector Storage**: Store embeddings in ChromaDB for retrieval
+5. **Semantic Search**: Find relevant content based on your questions
+6. **AI Response**: Use Gemini to generate answers from the retrieved content
 
 ---
 
@@ -159,7 +159,7 @@ python run.py
 
 ### Pro Tips 💡
 
-- **Large Collections**: For 500+ files, use the file limit feature to test with smaller batches first
+- **Large Collections**: For 500+ files, consider using the file limit feature to test with smaller batches first
 - **Debug Mode**: Toggle debug mode (Option 3) to see retrieved documents and processing details
 - **Exit Chat**: Type `:exit` to return to the main menu
 - **Interrupt**: Use `Ctrl+C` to safely exit at any time
@@ -196,8 +196,8 @@ search_kwargs = {
 
 | Metric | Recommendation | Notes |
 |--------|---------------|-------|
-| **Files per Store** | < 2,000 | Batch processing for larger collections |
-| **File Size** | < 50MB each | Large files are automatically chunked |
+| **Files per Store** | < 2,000 | Works best with smaller collections |
+| **File Size** | < 20MB each | Large files are automatically chunked |
 | **Chunk Size** | 1000-1500 tokens | Balance between context and precision |
 | **API Calls** | ~1 per chunk + queries | Monitor your Google AI quota |
 
