@@ -5,7 +5,23 @@ run.py
 This is the main entry point for the application. Running this script in a terminal will provide the user with
 a CLI, a list of available vector stores currently in local app data cache, and the following options:
  1. Create a new vector store: This will prompt the user to enter a file or folder path, as well as a name for the vector store.
- 2. Chat with existing vector store: This will create a new chat session and connect to the selected vector store.
+ 2. Chat with existing vector store: This will create a new chat session and connec            choice = get_user_input("Select an option (1-5): ", Colors.YELLOW)
+            
+            if choice == '1':
+                create_new_vector_store()
+            elif choice == '2':
+                chat_with_vector_store()
+            elif choice == '3':
+                delete_vector_store()
+            elif choice == '4':
+                toggle_debug_mode()
+            elif choice == '5':
+                print(f"\n{Colors.CYAN}Thank you for using the Retrieval Augmented Resource Chat System!{Colors.END}")
+                print(f"{Colors.CYAN}Goodbye!{Colors.END}\n")
+                sys.exit(0)
+            else:
+                print_error("Invalid option. Please select 1, 2, 3, 4, or 5.")
+                input(f"\n{Colors.YELLOW}Press Enter to continue...{Colors.END}")ed vector store.
  3. Exit: This will exit the application.
 
 Creating a new vector store will end with the user being returned to the main menu CLI with the options above, with the
@@ -36,9 +52,9 @@ class Colors:
     END = '\033[0m'
 
 # Import our core functionality
-from core.utils import list_vector_stores, add_vector_store_to_registry
+from core.utils import list_vector_stores, add_vector_store_to_registry, remove_vector_store_from_registry
 from core.vector_store import create_vector_store, create_retriever_tool_from_vector_store
-from core.chains import create_agent_with_tools_and_memory
+from core.agent import create_agent_with_tools_and_memory
 
 # Global debug flag
 DEBUG_MODE = False
@@ -57,8 +73,9 @@ def print_main_menu():
     print(f"{Colors.BOLD}{Colors.WHITE}Main Menu:{Colors.END}")
     print(f"{Colors.YELLOW}1.{Colors.END} Create a new vector store")
     print(f"{Colors.YELLOW}2.{Colors.END} Chat with existing vector store")
-    print(f"{Colors.YELLOW}3.{Colors.END} Toggle debug mode {'(ON)' if DEBUG_MODE else '(OFF)'}")
-    print(f"{Colors.YELLOW}4.{Colors.END} Exit")
+    print(f"{Colors.YELLOW}3.{Colors.END} Delete an existing vector store")
+    print(f"{Colors.YELLOW}4.{Colors.END} Toggle debug mode {'(ON)' if DEBUG_MODE else '(OFF)'}")
+    print(f"{Colors.YELLOW}5.{Colors.END} Exit")
     print()
 
 
@@ -282,14 +299,95 @@ def chat_with_vector_store():
         print(f"{Colors.YELLOW}Type ':exit' to return to main menu.{Colors.END}\n")
         
         # Start chat loop
-        start_chat_session(agent, session_id, selected_store_name)
+        start_chat_session(agent, session_id, selected_store_name, topic)
         
     except Exception as e:
         print_error(f"Failed to connect to vector store: {str(e)}")
         input(f"\n{Colors.YELLOW}Press Enter to return to main menu...{Colors.END}")
 
 
-def start_chat_session(agent, session_id: str, store_name: str):
+def delete_vector_store():
+    """Handle vector store deletion workflow."""
+    print(f"\n{Colors.BOLD}{Colors.CYAN}Delete Vector Store{Colors.END}")
+    print("-" * 30)
+    
+    # List available stores
+    stores = list_available_vector_stores()
+    if not stores:
+        input(f"\n{Colors.YELLOW}Press Enter to return to main menu...{Colors.END}")
+        return
+    
+    # Get user selection
+    store_list = list(stores.keys())
+    while True:
+        try:
+            choice = get_user_input(f"Select a vector store to delete (1-{len(store_list)}): ", Colors.YELLOW)
+            choice_num = int(choice)
+            if 1 <= choice_num <= len(store_list):
+                selected_store_name = store_list[choice_num - 1]
+                break
+            else:
+                print_error(f"Please enter a number between 1 and {len(store_list)}.")
+        except ValueError:
+            print_error("Please enter a valid number.")
+    
+    # Get selected store info
+    store_info = stores[selected_store_name]
+    persist_directory = store_info['persist_directory']
+    description = store_info.get('description', 'No description')
+    
+    # Show details and confirm deletion
+    print(f"\n{Colors.RED}{Colors.BOLD}WARNING: This action cannot be undone!{Colors.END}")
+    print(f"\n{Colors.YELLOW}Vector store details:{Colors.END}")
+    print(f"  Name: {selected_store_name}")
+    print(f"  Description: {description}")
+    print(f"  Persist Directory: {persist_directory}")
+    
+    # Double confirmation
+    print(f"\n{Colors.RED}This will permanently delete:{Colors.END}")
+    print(f"  • The vector store entry from the registry")
+    print(f"  • All persisted vector data files")
+    print(f"  • Any embeddings and indexes")
+    
+    confirm1 = get_user_input(f"\nAre you sure you want to delete '{selected_store_name}'? (type 'yes' to confirm): ", Colors.RED).strip()
+    
+    if confirm1.lower() != 'yes':
+        print(f"\n{Colors.CYAN}Deletion cancelled.{Colors.END}")
+        input(f"\n{Colors.YELLOW}Press Enter to return to main menu...{Colors.END}")
+        return
+    
+    # Final confirmation
+    confirm2 = get_user_input(f"Type the store name '{selected_store_name}' to confirm deletion: ", Colors.RED).strip()
+    
+    if confirm2 != selected_store_name:
+        print(f"\n{Colors.CYAN}Deletion cancelled - store name doesn't match.{Colors.END}")
+        input(f"\n{Colors.YELLOW}Press Enter to return to main menu...{Colors.END}")
+        return
+    
+    # Proceed with deletion
+    print(f"\n{Colors.CYAN}Deleting vector store '{selected_store_name}'...{Colors.END}")
+    
+    try:
+        success = remove_vector_store_from_registry(selected_store_name, debug=DEBUG_MODE)
+        
+        if success:
+            print_success(f"Vector store '{selected_store_name}' has been permanently deleted!")
+            print(f"{Colors.CYAN}• Removed from registry{Colors.END}")
+            print(f"{Colors.CYAN}• Deleted all persisted files{Colors.END}")
+        else:
+            print_error(f"Failed to delete vector store '{selected_store_name}'. It may not exist in the registry.")
+            
+    except Exception as e:
+        print_error(f"An error occurred while deleting the vector store: {str(e)}")
+        if DEBUG_MODE:
+            import traceback
+            print(f"\n{Colors.RED}Full error traceback:{Colors.END}")
+            traceback.print_exc()
+    
+    input(f"\n{Colors.YELLOW}Press Enter to return to main menu...{Colors.END}")
+
+
+def start_chat_session(agent, session_id: str, store_name: str, topic: str):
     """Handle the chat session loop."""
     print(f"{Colors.BOLD}{Colors.CYAN}=== Chat Session with '{store_name}' ==={Colors.END}")
     print(f"{Colors.GREEN}[CHAT]{Colors.END} Hello! I'm ready to help you with questions about {store_name}. What would you like to know?")
@@ -312,8 +410,12 @@ def start_chat_session(agent, session_id: str, store_name: str):
             
             try:
                 response = agent.invoke(
-                    {"input": user_input},
-                    config={"configurable": {"session_id": session_id}}
+                    {
+                        "input": user_input,
+                        "session_id": session_id,
+                        "debug": DEBUG_MODE,
+                        "topic": topic
+                    },
                 )
                 
                 # Clear the "Thinking..." message and print response
@@ -368,20 +470,22 @@ def main():
             print_header()
             print_main_menu()
             
-            choice = get_user_input("Select an option (1-4): ", Colors.YELLOW)
+            choice = get_user_input("Select an option (1-5): ", Colors.YELLOW)
             
             if choice == '1':
                 create_new_vector_store()
             elif choice == '2':
                 chat_with_vector_store()
             elif choice == '3':
-                toggle_debug_mode()
+                delete_vector_store()
             elif choice == '4':
+                toggle_debug_mode()
+            elif choice == '5':
                 print(f"\n{Colors.CYAN}Thank you for using the Retrieval Augmented Resource Chat System!{Colors.END}")
                 print(f"{Colors.CYAN}Goodbye!{Colors.END}\n")
                 sys.exit(0)
             else:
-                print_error("Invalid option. Please select 1, 2, 3, or 4.")
+                print_error("Invalid option. Please select 1, 2, 3, 4, or 5.")
                 input(f"\n{Colors.YELLOW}Press Enter to continue...{Colors.END}")
     
     except KeyboardInterrupt:

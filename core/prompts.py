@@ -36,7 +36,7 @@ When you reference information from the knowledge base, present it as part of yo
 If the knowledge base lacks information on a topic, acknowledge this honestly while still providing value through your general expertise and suggesting alternative approaches or related areas to explore."""
 
 # Tool description for the retriever
-RETRIEVER_TOOL_DESCRIPTION = RETRIEVER_TOOL_DESCRIPTION = """Search the knowledge base for relevant documents and information using semantic similarity. 
+RETRIEVER_TOOL_DESCRIPTION = """Search the knowledge base for relevant documents and information using semantic similarity. 
 This tool retrieves the most relevant content based on meaning and context, not just keyword matching.
 
 Use this tool to:

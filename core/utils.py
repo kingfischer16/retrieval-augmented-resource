@@ -9,6 +9,7 @@ Utility functions for the application, inlcuding setup and registry management f
 import os
 import sys
 import json
+import shutil
 from pathlib import Path
 from typing import Dict, List, Any
 from langchain_core.documents import Document
@@ -178,6 +179,73 @@ def add_vector_store_to_registry(
             print(f"Failed to save '{name}' to registry")
     
     return success
+
+def remove_vector_store_from_registry(name: str, debug: bool = False) -> bool:
+    """
+    Remove a vector store from the registry and delete its persisted files.
+    
+    Args:
+        name: Name of the vector store to remove
+        debug: Whether to show debug output
+        
+    Returns:
+        bool: True if successful, False otherwise.
+    """
+    if debug:
+        print(f"Removing vector store '{name}' from registry...")
+    
+    registry = load_vector_store_registry()
+    stores = registry.get("stores", {})
+    
+    if name not in stores:
+        if debug:
+            print(f"Vector store '{name}' not found in registry")
+        return False
+    
+    store_entry = stores[name]
+    persist_directory = store_entry.get("persist_directory")
+    
+    if debug:
+        print(f"Found vector store '{name}' with persist directory: {persist_directory}")
+    
+    # Remove from registry first
+    del registry["stores"][name]
+    
+    # Save updated registry
+    registry_saved = save_vector_store_registry(registry)
+    
+    if not registry_saved:
+        if debug:
+            print(f"Failed to save updated registry after removing '{name}'")
+        return False
+    
+    # Delete the persisted files/directory
+    if persist_directory:
+        persist_path = Path(persist_directory)
+        if persist_path.exists():
+            try:
+                if persist_path.is_dir():
+                    shutil.rmtree(persist_path)
+                else:
+                    persist_path.unlink()
+                
+                if debug:
+                    print(f"Successfully deleted persist directory: {persist_path}")
+            except (OSError, PermissionError) as e:
+                if debug:
+                    print(f"Warning: Failed to delete persist directory {persist_path}: {e}")
+                # Still return True since registry was updated successfully
+        else:
+            if debug:
+                print(f"Persist directory {persist_path} does not exist")
+    
+    if debug:
+        print(f"Successfully removed '{name}' from registry")
+        # Verify by reloading
+        updated_registry = load_vector_store_registry()
+        print(f"Updated registry now has {len(updated_registry.get('stores', {}))} stores")
+    
+    return True
 
 def list_vector_stores() -> Dict[str, Dict[str, Any]]:
     """
