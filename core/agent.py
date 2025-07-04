@@ -10,32 +10,45 @@ from langchain.agents import AgentExecutor, create_tool_calling_agent # remove w
 
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage, ToolMessage
+from langgraph.checkpoint.memory import MemorySaver
 from langchain_community.chat_message_histories import ChatMessageHistory
 from langchain_core.runnables.history import RunnableWithMessageHistory
 
 from langgraph.graph import StateGraph, END
 from langgraph.prebuilt import ToolNode
+from langgraph.graph.message import add_messages
 
-from typing import Any, Dict, List, Optional
+from typing import List, Any, Dict, Optional, Annotated, TypedDict
 from pydantic import BaseModel, Field
 
 from core.models import chat_model
 from core.prompts import AGENT_SYSTEM_PROMPT
 
-class AgentState(BaseModel):
-    """State for the LangGraph agent."""
-    messages: List[BaseMessage] = Field(default_factory=list, description="Chat history messages")
-    input: str = Field(default="", description="Current user input")
-    intermediate_steps: List[Dict[str, Any]] = Field(default_factory=list, description="Tool call steps")
-    output: Optional[str] = Field(default=None, description="Final agent output")
-    session_id: str = Field(default="", description="Session identifier")
-    topic: str = Field(default="", description="Topic/subject matter")
-    debug: bool = Field(default=False, description="Debug mode flag")
-    loop_count: int = Field(default=0, description="Number of loops in current question")
-    max_loops: int = Field(default=10, description="Maximum number of loops allowed")
+# --- Single State Definition using TypedDict ---
+class AgentState(TypedDict):
+    """
+    The state of the agent.
+
+    Attributes:
+        messages: The list of messages that have been exchanged.
+                  This is the primary way that memory is stored.
+                  The 'add_messages' reducer is used to append new messages.
+        input: The current user input. This is cleared after being processed.
+        topic: The topic/subject matter for the agent's context.
+        debug: A flag to enable or disable debug printing.
+        loop_count: The number of loops in the current turn.
+        max_loops: The maximum number of loops allowed per turn.
+    """
+    messages: Annotated[List[BaseMessage], add_messages]
+    input: str
+    topic: str
+    debug: bool
+    loop_count: int
+    max_loops: int
+    output: str
 
 
-def create_agent_with_tools_and_memory(tools: List[object], topic: str, debug: bool = False, max_loops: int = 3):
+def create_agent_with_tools_and_memory(tools: List[object], topic: str, debug: bool = False, max_loops: int = 6):
     """
     Create an agent with tools and conversational memory.
     
@@ -49,62 +62,60 @@ def create_agent_with_tools_and_memory(tools: List[object], topic: str, debug: b
         A runnable agent with message history that can be invoked with:
         agent.invoke({"input": "message"}, config={"configurable": {"session_id": "session_id"}})
     """
+    memory = MemorySaver()
     tool_node = ToolNode(tools)
+    model_with_tools = chat_model.bind_tools(tools)
 
     def call_model(state: AgentState) -> dict:
         """
         Node for calling the LLM.
         """
         if debug:
-            print(f"[DEBUG] call_model - Input: {state.input}")
-            print(f"[DEBUG] call_model - Current messages count: {len(state.messages)}")
+            print(f"\n--- Calling Model (Loop: {state['loop_count']}) ---")
+            print(f"[DEBUG] call_model - Input: {state['input']}")
+            print(f"[DEBUG] call_model - Current messages count: {len(state['messages'])}")
         
-        # Build the message sequence properly
-        messages = []
+        # We will now use the built-in message adder, so we just need to prepare the new messages
+        new_messages = []
         
         # Add system message only if no messages exist yet
-        if not state.messages:
-            messages.append(SystemMessage(content=f"You are working on: {state.topic}. {AGENT_SYSTEM_PROMPT}"))
+        if not state['messages']:
+            new_messages.append(SystemMessage(content=f"You are working on: {topic}. {AGENT_SYSTEM_PROMPT}"))
         
-        # Add existing chat history
-        messages.extend(state.messages)
-        
-        # Add current user input
-        if state.input:
-            messages.append(HumanMessage(content=state.input))
+        # Add the current user input as a HumanMessage
+        if state['input'] and state['loop_count'] == 0:
+            if debug:
+                print(f"[DEBUG] call_model - Adding user input as HumanMessage")
+            new_messages.append(HumanMessage(content=state['input']))
+
+        # The full history is passed to the model
+        # Note: state['messages'] is now automatically loaded by the checkpointer!
+        messages_to_send = state['messages'] + new_messages
 
         if debug:
-            print(f"[DEBUG] call_model - Total messages to send: {len(messages)}")
+            print(f"[DEBUG] call_model - Total messages to send: {len(messages_to_send)}")
 
-        model_with_tools = chat_model.bind_tools(tools)
-        response = model_with_tools.invoke(messages)
+        response = model_with_tools.invoke(messages_to_send)
+        new_messages.append(response)
 
-        if debug:
-            print(f"[DEBUG] call_model - Response type: {type(response)}")
-            print(f"[DEBUG] call_model - Response content: {response.content}")
-            print(f"[DEBUG] call_model - Has tool_calls attr: {hasattr(response, 'tool_calls')}")
-            if hasattr(response, 'tool_calls'):
-                print(f"[DEBUG] call_model - Tool calls: {response.tool_calls}")
-        
-        messages.append(response)  # Use the actual response with tool calls
-        
         return {
-            "messages": messages,
-            "output": response.content if hasattr(response, 'content') else str(response),
-            "loop_count": 0,  # Reset loop count for new question
-            "max_loops": max_loops  # Set max loops
+            "messages": new_messages,  # Return ONLY the new messages to be appended
+            "input": "", # Clear the input field after processing
+            "loop_count": state['loop_count'] + 1,
+            "max_loops": max_loops,
+            "output": response.content if isinstance(response, AIMessage) else ""
         }
 
     def call_tools(state: AgentState) -> dict:
         """
         Node for calling tools with the current state.
         """
-        last_message = state.messages[-1]
+        last_message = state['messages'][-1]
 
         if debug:
             print(f"[DEBUG] call_tools - Last message type: {type(last_message)}")
             print(f"[DEBUG] call_tools - Tool calls: {getattr(last_message, 'tool_calls', 'None')}")
-            print(f"[DEBUG] call_tools - Loop count: {state.loop_count}")
+            print(f"[DEBUG] call_tools - Loop count: {state['loop_count']}")
 
         tool_results = tool_node.invoke({"messages": [last_message]})
 
@@ -112,50 +123,54 @@ def create_agent_with_tools_and_memory(tools: List[object], topic: str, debug: b
             print(f"[DEBUG] call_tools - Tool results: {tool_results}")
         
         return {
-            "messages": state.messages + tool_results["messages"],
-            "loop_count": state.loop_count + 1
+            "messages": tool_results["messages"],
+            "loop_count": state['loop_count'] + 1
         }
     
     def should_continue(state: AgentState) -> str:
         """
         Check if the agent should continue processing.
         """
-        last_message = state.messages[-1]
+        last_message = state['messages'][-1]
+        tool_calls = getattr(last_message, 'tool_calls', [])
 
         if debug:
             print(f"[DEBUG] should_continue - Last message type: {type(last_message)}")
-            print(f"[DEBUG] should_continue - Has tool_calls: {hasattr(last_message, 'tool_calls')}")
-            print(f"[DEBUG] should_continue - Loop count: {state.loop_count}/{state.max_loops}")
-            if hasattr(last_message, 'tool_calls'):
-                print(f"[DEBUG] should_continue - Tool calls: {last_message.tool_calls}")
+            print(f"[DEBUG] should_continue - Loop count: {state['loop_count']}/{state['max_loops']}")
+            print(f"[DEBUG] should_continue - Tool calls count: {len(tool_calls)}")
+            if tool_calls:
+                print(f"[DEBUG] should_continue - Tool calls: {tool_calls}")
         
         # Check if we've exceeded the maximum number of loops
-        if state.loop_count >= state.max_loops:
+        if state['loop_count'] >= state['max_loops']:
             if debug:
-                print(f"[DEBUG] should_continue - Maximum loops reached ({state.max_loops}), ending")
+                print(f"[DEBUG] should_continue - Maximum loops reached, ending")
             return "end"
         
-        # Check if the last message has tool calls
-        if hasattr(last_message, "tool_calls") and last_message.tool_calls:
+        # Simply check if tool_calls list has any items
+        if tool_calls:
             return "continue"
         else:
-            return "end"  # Return string, not END constant
+            return "end"
     
     # Create the graph
     graph_builder = StateGraph(AgentState)
+    # Add nodes
     graph_builder.add_node("call_model", call_model)
     graph_builder.add_node("call_tools", call_tools)
+    # Define flow
     graph_builder.set_entry_point("call_model")
     graph_builder.add_conditional_edges(
         "call_model",
         should_continue,
         {
             "continue": "call_tools",
-            "end": END  # Map string to END constant
+            "end": END
         }
     )
     graph_builder.add_edge("call_tools", "call_model")
-    return graph_builder.compile()
+    # Compile the graph with memory
+    return graph_builder.compile(checkpointer=memory)
 
 
 def old_create_agent_with_tools_and_memory(tools: List[object], topic: str, debug: bool = False):

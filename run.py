@@ -409,17 +409,21 @@ def start_chat_session(agent, session_id: str, store_name: str, topic: str):
             print(f"{Colors.CYAN}Thinking...{Colors.END}", end="", flush=True)
             
             try:
+                config = {"configurable": {"thread_id": session_id}}
                 response = agent.invoke(
                     {
                         "input": user_input,
-                        "session_id": session_id,
+                        "topic": topic,  # ← Add missing comma
                         "debug": DEBUG_MODE,
-                        "topic": topic
+                        "loop_count": 0,  # ← Initialize for new questions
+                        "max_loops": 3    # ← Initialize max_loops
                     },
+                    config=config
                 )
                 
                 # Clear the "Thinking..." message and print response
                 print(f"\r{' ' * 12}\r", end="")  # Clear the line
+                print("Printing output...")
                 print(f"{Colors.GREEN}[CHAT]{Colors.END} {response['output']}")
                 
             except Exception as e:
