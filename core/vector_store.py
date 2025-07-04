@@ -19,8 +19,6 @@ of documents that will be used to create the vector store.
 
 """
 # Standard library imports
-import os
-import sys
 from pathlib import Path
 from typing import Literal
 

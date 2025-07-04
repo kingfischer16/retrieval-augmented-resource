@@ -11,7 +11,7 @@ import sys
 import json
 import shutil
 from pathlib import Path
-from typing import Dict, List, Any
+from typing import Dict, Any
 from langchain_core.documents import Document
 
 RAR_APP_NAME = "RetrievalAugmentedResource"

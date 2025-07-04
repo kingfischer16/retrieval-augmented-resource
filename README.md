@@ -1,55 +1,45 @@
 # 🧠 Retrieval-Augmented Resource (RAR)
 
 [![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
-[![LangChain](https://img.shields.io/badge/LangChain-0.1+-green.svg)](https://python.langchain.com/)
+[![LangGraph](https://img.shields.io/badge/LangGraph-latest-green.svg)](https://langchain-ai.github.io/langgraph/)
+[![LangChain](https://img.shields.io/badge/LangChain-0.1+-blue.svg)](https://python.langchain.com/)
 [![Google Gemini](https://img.shields.io/badge/Gemini-AI-orange.svg)](https://ai.google.dev/)
+[![RAG](https://img.shields.io/badge/RAG-Retrieval--Augmented--Generation-purple.svg)]()
 [![MIT License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-> **Transform any collection of documents into an intelligent, conversational knowledge base with the power of RAG (Retrieval-Augmented Generation) and Google's Gemini AI.**
+> **A simple CLI application for chatting with your documents using RAG and Google's Gemini AI.**
 
 ---
 
 ## 🚀 What is RAR?
 
-**Retrieval-Augmented Resource (RAR)** is a simple CLI application that lets you chat with your documents using AI. It converts your files into searchable knowledge bases using RAG (Retrieval-Augmented Generation) technology.
+**Retrieval-Augmented Resource (RAR)** is a CLI application that lets you chat with your documents. Upload files, ask questions, and get AI-powered answers based on your content.
 
-> 🎓 **Learning Project**: This repository was created as a self-directed learning project to explore LangChain, Google Gemini, and agentic AI system development. It serves as both a functional tool and an educational resource for understanding modern RAG implementations.
+> 🎓 **Learning Project**: This is a self-directed learning project exploring LangGraph, LangChain, and RAG implementations. It demonstrates how to build a conversational document query system using modern AI tools.
 
-### ✨ Key Features
+### ✨ Features
 
-- **🔍 Multi-Format Support**: PDF, TXT, MD, CSV, HTML, JSON, DOCX
-- **🧠 Text Chunking**: Splits documents with configurable overlap
-- **⚡ Vector Search**: Semantic search using ChromaDB
-- **🤖 Conversational AI**: Natural language querying with Google Gemini
-- **🎨 Clean CLI**: Color-coded interface with progress tracking
-- **🔧 Debug Mode**: See what's happening under the hood
-- **📁 Batch Processing**: Handle multiple files at once
-- **💾 Local Storage**: Your knowledge bases are saved locally
+- **Multi-Format Support**: PDF, TXT, MD, CSV, HTML, JSON, DOCX
+- **Semantic Search**: Find relevant content using vector embeddings  
+- **Conversational Memory**: Maintains context across questions
+- **Local Storage**: Vector stores saved to your machine
+- **Debug Mode**: View retrieval and processing details
+- **Batch Processing**: Handle multiple files simultaneously
 
 ---
 
 ## 🎯 Use Cases
 
-### 📚 **Research & Academia**
-Turn research papers, notes, and academic resources into a searchable knowledge base.
-
-### 💼 **Business Documents**
-Convert company documents, reports, and policies into a queryable system.
-
-### 📖 **Documentation**
-Make technical documentation, manuals, and guides easier to search through.
-
-### 🎮 **Content Analysis**
-Search through collections of articles, transcripts, or other text content.
-
-### 🔍 **Document Search**
-Query documents, case studies, and reports with natural language.
+- **Research**: Query academic papers and notes
+- **Documentation**: Search technical manuals and guides  
+- **Business**: Query company documents and reports
+- **Content Analysis**: Search articles and transcripts
 
 ---
 
 ## 🏗️ How It Works
 
-RAR uses a straightforward **Retrieval-Augmented Generation (RAG)** approach:
+RAR uses **LangGraph** to orchestrate a **Retrieval-Augmented Generation (RAG)** workflow:
 
 ```mermaid
 graph LR
@@ -57,15 +47,16 @@ graph LR
     B --> C[🧮 Embeddings]
     C --> D[🗄️ Vector Store]
     D --> E[🔍 Semantic Search]
-    E --> F[🤖 AI Response]
+    E --> F[🤖 LangGraph Agent]
+    F --> G[💬 AI Response]
 ```
 
-1. **Document Loading**: Load and parse various file formats
-2. **Text Chunking**: Split text into smaller, manageable segments
-3. **Vector Embeddings**: Convert text chunks into searchable vectors
-4. **Vector Storage**: Store embeddings in ChromaDB for retrieval
-5. **Semantic Search**: Find relevant content based on your questions
-6. **AI Response**: Use Gemini to generate answers from the retrieved content
+1. **Document Processing**: Load and split documents into chunks
+2. **Vector Embeddings**: Convert text chunks to searchable vectors (ChromaDB)
+3. **LangGraph Agent**: Manages the conversation flow and tool calling
+4. **Semantic Retrieval**: Find relevant chunks for each question
+5. **Response Generation**: Use Gemini to answer based on retrieved content
+6. **Memory Persistence**: Maintain conversation history across questions
 
 ---
 
@@ -110,7 +101,7 @@ Edit `core/config.py` to customize:
 
 ```python
 # Model Configuration
-GEMINI_EMBEDDING_MODEL_NAME = "models/embedding-001"  # or "models/text-embedding-004"
+GEMINI_EMBEDDING_MODEL_NAME = "models/embedding-001"
 GEMINI_CHAT_MODEL_NAME = "gemini-2.5-flash-lite-preview-06-17"
 
 # Processing Settings
@@ -119,7 +110,7 @@ CHUNK_OVERLAP = 200            # Overlap between chunks
 CHAT_MODEL_TEMPERATURE = 0.2   # Response creativity (0.0-1.0)
 ```
 
-> ⚠️ **Important**: If you change the embedding model (`GEMINI_EMBEDDING_MODEL_NAME`), previously created vector stores will not function correctly due to embedding dimension mismatches. You'll need to recreate any existing vector stores with the new embedding model.
+> ⚠️ **Note**: Changing embedding models requires recreating existing vector stores due to dimension mismatches.
 
 ---
 
@@ -135,135 +126,110 @@ python run.py
 
 1. **Select Option 1**: Create a new vector store
 2. **Enter File/Folder Path**: Point to your documents
-   ```
-   Enter file or folder path: /path/to/your/documents
-   ```
-3. **Name Your Store**: Give it a memorable name
-   ```
-   Enter a name for the vector store: My Research Papers
-   ```
-4. **Add Description** (optional):
-   ```
-   Enter a description: Collection of AI research papers from 2024
-   ```
+3. **Name Your Store**: Give it a memorable name  
+4. **Add Description** (optional)
 
 ### Start Chatting
 
 1. **Select Option 2**: Chat with existing vector store
 2. **Choose Your Store**: Select from the numbered list
-3. **Ask Questions**: Start with natural language queries
-   ```
-   [USER] What are the main findings about transformer architectures?
-   [CHAT] Based on the documents, the main findings about transformer architectures include...
-   ```
+3. **Ask Questions**: Natural language queries about your documents
 
-### Pro Tips 💡
+### Menu Options
 
-- **Large Collections**: For 500+ files, consider using the file limit feature to test with smaller batches first
-- **Debug Mode**: Toggle debug mode (Option 3) to see retrieved documents and processing details
-- **Exit Chat**: Type `:exit` to return to the main menu
-- **Interrupt**: Use `Ctrl+C` to safely exit at any time
+- **Option 1**: Create new vector store
+- **Option 2**: Chat with existing store  
+- **Option 3**: Delete a vector store
+- **Option 4**: Toggle debug mode
+- **Option 5**: Exit
+
+### Tips
+
+- **Large Collections**: Use file limits for 500+ files to avoid long processing times
+- **Debug Mode**: See retrieved documents and tool execution details
+- **Exit Chat**: Type `:exit` to return to main menu
 
 ---
 
-## 🔧 Advanced Configuration
+## 🔧 Configuration
 
-### Batch Processing
-
-For large document collections:
+### Batch Processing Settings
 
 ```python
-# Recommended settings for large collections
+# For large document collections
 CHUNK_SIZE = 1500           # Larger chunks for better context
 CHUNK_OVERLAP = 300         # More overlap for continuity
 ```
 
-### Search Optimization
-
-Customize retrieval in `vector_store.py`:
+### Search Parameters
 
 ```python
-# Adjust search parameters
+# Adjust retrieval in vector_store.py
 search_kwargs = {
-    "k": 6,                 # Return top 6 most relevant chunks
-    "score_threshold": 0.7  # Minimum similarity threshold
+    "k": 6,                 # Return top 6 chunks
+    "score_threshold": 0.7  # Minimum similarity
 }
 ```
 
 ---
 
-## 📊 Performance & Limits
+## 📊 Performance Notes
 
-| Metric | Recommendation | Notes |
-|--------|---------------|-------|
-| **Files per Store** | < 2,000 | Works best with smaller collections |
-| **File Size** | < 20MB each | Large files are automatically chunked |
-| **Chunk Size** | 1000-1500 tokens | Balance between context and precision |
-| **API Calls** | ~1 per chunk + queries | Monitor your Google AI quota |
+| Aspect | Recommendation |
+|--------|---------------|
+| **Files per Store** | < 1,000 for best performance |
+| **File Size** | < 20MB each (auto-chunked) |
+| **Chunk Size** | 1000-1500 tokens |
+| **API Usage** | ~1 call per chunk + queries |
 
 ---
 
 ## 🐛 Troubleshooting
 
-### Common Issues
+**API Key Error**
+- Verify your `GOOGLE_API_KEY` environment variable is set
 
-**❌ API Key Error**
-```
-Error: Failed to initialize embeddings
-```
-**✅ Solution**: Verify your `GOOGLE_API_KEY` environment variable
+**Out of Memory**  
+- Enable file limiting for large collections
 
-**❌ Out of Memory**
-```
-Process terminated unexpectedly
-```
-**✅ Solution**: Enable file limiting for large collections
+**No Documents Found**
+- Ensure files are in supported formats: PDF, TXT, MD, CSV, HTML, JSON, DOCX
 
-**❌ No Documents Found**
-```
-No supported documents found
-```
-**✅ Solution**: Ensure files are in supported formats (PDF, TXT, MD, CSV, HTML, JSON, DOCX)
-
-### Debug Mode
-
-Enable debug mode to see detailed processing information:
-- Retrieved document chunks
-- Tool call details
-- Verbose execution logs
+**Debug Mode**
+- Enable to see retrieved chunks, tool calls, and execution details
 
 ---
 
 ## 🤝 Contributing
 
-We welcome contributions! Here's how you can help:
+Contributions welcome! This is a learning project, so:
 
-1. **🐛 Bug Reports**: Open an issue with detailed reproduction steps
-2. **💡 Feature Requests**: Suggest new capabilities or improvements
-3. **🔧 Code Contributions**: Fork, develop, and submit pull requests
-4. **📚 Documentation**: Help improve guides and examples
+- **Bug Reports**: Open issues with reproduction steps
+- **Feature Ideas**: Suggest improvements  
+- **Code**: Fork, develop, submit PRs
+- **Documentation**: Help improve clarity
 
 ---
 
 ## 📜 License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+MIT License - see [LICENSE](LICENSE) for details.
 
 ---
 
 ## 🙏 Acknowledgments
 
-- **[LangChain](https://python.langchain.com/)** for the RAG framework
+- **[LangGraph](https://langchain-ai.github.io/langgraph/)** for agent orchestration
+- **[LangChain](https://python.langchain.com/)** for RAG framework  
 - **[Google AI](https://ai.google.dev/)** for Gemini models
 - **[ChromaDB](https://www.trychroma.com/)** for vector storage
-- **[Unstructured](https://unstructured.io/)** for document processing
 
 ---
 
 <div align="center">
 
-**Made with ❤️ for the AI community**
+**A simple learning project for exploring RAG and LangGraph**
 
-[⭐ Star this repo](https://github.com/yourusername/retrieval-augmented-resource) • [🐛 Report issues](https://github.com/yourusername/retrieval-augmented-resource/issues) • [💡 Request features](https://github.com/yourusername/retrieval-augmented-resource/discussions)
+[⭐ Star this repo](https://github.com/yourusername/retrieval-augmented-resource) • [🐛 Report issues](https://github.com/yourusername/retrieval-augmented-resource/issues)
 
 </div>
