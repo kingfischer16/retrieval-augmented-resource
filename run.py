@@ -214,8 +214,8 @@ def create_new_vector_store():
         max_files = None
     
     try:
-        # Create the vector store
-        create_vector_store(
+        # Create the vector store (this function handles registration internally)
+        success = create_vector_store(
             file_or_folder_path=path,
             store_name=store_name,
             description=description,
@@ -225,7 +225,10 @@ def create_new_vector_store():
             max_files=max_files if 'max_files' in locals() else None
         )
         
-        print_success(f"Vector store '{store_name}' created successfully!")
+        if success:
+            print_success(f"Vector store '{store_name}' created successfully!")
+        else:
+            print_error(f"Failed to create vector store '{store_name}'. See error messages above.")
         
     except KeyboardInterrupt:
         print_error("Vector store creation was interrupted by user.")

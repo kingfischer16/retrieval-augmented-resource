@@ -21,6 +21,8 @@ of documents that will be used to create the vector store.
 # Standard library imports
 from pathlib import Path
 from typing import Literal
+import unicodedata
+import re
 
 # Langchain imports
 from langchain.document_loaders import (
@@ -28,8 +30,7 @@ from langchain.document_loaders import (
     CSVLoader,
     UnstructuredMarkdownLoader,
     UnstructuredHTMLLoader,
-    PyPDFLoader,
-    DirectoryLoader
+    PyPDFLoader
 )
 from langchain_text_splitters import (
     RecursiveCharacterTextSplitter, 
@@ -46,6 +47,166 @@ from core.models import embedding_model
 
 # Constants
 APP_DATA_FOLDER = "cache"
+
+def clean_text_for_embedding(text: str) -> str:
+    """
+    Clean text content to handle Unicode encoding issues that can cause problems
+    during vector store creation.
+    
+    This function removes or replaces problematic Unicode characters while preserving
+    as much readable content as possible.
+    
+    Args:
+        text (str): The original text content
+        
+    Returns:
+        str: Cleaned text that should be safe for embedding processing
+    """
+    if not text:
+        return text
+    
+    try:
+        # Step 1: Normalize Unicode characters (decompose and recompose)
+        # This handles many Unicode normalization issues
+        text = unicodedata.normalize('NFKC', text)
+        
+        # Step 2: Remove or replace problematic Unicode categories
+        cleaned_chars = []
+        for char in text:
+            # Get the Unicode category of the character
+            category = unicodedata.category(char)
+            
+            # Keep most printable characters
+            if category.startswith(('L', 'N', 'P', 'Z', 'S')):
+                # L = Letters, N = Numbers, P = Punctuation, Z = Separators, S = Symbols
+                # But exclude some problematic symbol categories
+                if category in ['Sk', 'So']:  # Symbol, modifier and Symbol, other
+                    # Replace mathematical and other symbols with space
+                    cleaned_chars.append(' ')
+                else:
+                    cleaned_chars.append(char)
+            elif category.startswith('M'):  # Mark characters (accents, etc.)
+                # Keep combining marks as they're usually fine
+                cleaned_chars.append(char)
+            elif category.startswith('C'):  # Control characters
+                if char in ['\n', '\r', '\t']:
+                    # Keep essential whitespace
+                    cleaned_chars.append(char)
+                else:
+                    # Replace other control characters with space
+                    cleaned_chars.append(' ')
+            else:
+                # Replace any other problematic characters with space
+                cleaned_chars.append(' ')
+        
+        text = ''.join(cleaned_chars)
+        
+        # Step 3: Handle surrogate pairs and other encoding issues
+        # Encode to UTF-8 and back to catch encoding issues early
+        text = text.encode('utf-8', errors='replace').decode('utf-8')
+        
+        # Step 4: Clean up multiple spaces and normalize whitespace
+        text = re.sub(r'\s+', ' ', text).strip()
+        
+        return text
+        
+    except Exception as e:
+        # If all else fails, use aggressive cleaning
+        print(f"Warning: Advanced text cleaning failed, using basic cleaning: {e}")
+        # Remove non-ASCII characters as last resort
+        text = ''.join(char if ord(char) < 128 else ' ' for char in text)
+        text = re.sub(r'\s+', ' ', text).strip()
+        return text
+
+def clean_document_content(documents: list) -> list:
+    """
+    Clean the content of a list of documents to handle Unicode encoding issues.
+    
+    Args:
+        documents (list): List of Document objects
+        
+    Returns:
+        list: List of Document objects with cleaned content
+    """
+    cleaned_documents = []
+    
+    for i, doc in enumerate(documents):
+        try:
+            # Clean the main page content
+            cleaned_content = clean_text_for_embedding(doc.page_content)
+            
+            # Create a new document with cleaned content
+            cleaned_doc = doc.copy()
+            cleaned_doc.page_content = cleaned_content
+            
+            # Also clean any text in metadata if present
+            if hasattr(cleaned_doc, 'metadata') and cleaned_doc.metadata:
+                for key, value in cleaned_doc.metadata.items():
+                    if isinstance(value, str):
+                        cleaned_doc.metadata[key] = clean_text_for_embedding(value)
+            
+            cleaned_documents.append(cleaned_doc)
+            
+        except Exception as e:
+            print(f"Warning: Failed to clean document {i+1}, skipping: {e}")
+            continue
+    
+    print(f"Cleaned {len(cleaned_documents)} documents for Unicode compatibility")
+    return cleaned_documents
+
+def aggressive_text_cleaning(documents: list) -> list:
+    """
+    Perform aggressive text cleaning as a fallback when standard cleaning fails.
+    This will remove more characters but ensure compatibility.
+    
+    Args:
+        documents (list): List of Document objects
+        
+    Returns:
+        list: List of Document objects with aggressively cleaned content
+    """
+    cleaned_documents = []
+    
+    for i, doc in enumerate(documents):
+        try:
+            # Very aggressive cleaning - only keep basic ASCII and essential Unicode
+            content = doc.page_content
+            
+            # Keep only printable ASCII characters, basic punctuation, and whitespace
+            cleaned_content = ''.join(
+                char for char in content 
+                if (32 <= ord(char) <= 126) or char in ['\n', '\r', '\t', ' ']
+            )
+            
+            # Clean up excessive whitespace
+            cleaned_content = re.sub(r'\s+', ' ', cleaned_content).strip()
+            
+            if len(cleaned_content) < 10:  # Skip documents with too little content
+                print(f"Warning: Document {i+1} has insufficient content after aggressive cleaning, skipping")
+                continue
+            
+            # Create cleaned document
+            cleaned_doc = doc.copy()
+            cleaned_doc.page_content = cleaned_content
+            
+            # Clean metadata too
+            if hasattr(cleaned_doc, 'metadata') and cleaned_doc.metadata:
+                for key, value in cleaned_doc.metadata.items():
+                    if isinstance(value, str):
+                        cleaned_value = ''.join(
+                            char for char in value 
+                            if (32 <= ord(char) <= 126) or char in ['\n', '\r', '\t', ' ']
+                        )
+                        cleaned_doc.metadata[key] = cleaned_value.strip()
+            
+            cleaned_documents.append(cleaned_doc)
+            
+        except Exception as e:
+            print(f"Warning: Failed to aggressively clean document {i+1}, skipping: {e}")
+            continue
+    
+    print(f"Aggressively cleaned {len(cleaned_documents)} documents (ASCII-only mode)")
+    return cleaned_documents
 
 # Helper functions
 def get_or_create_cache_dir() -> str:
@@ -65,20 +226,21 @@ def get_or_create_cache_dir() -> str:
 
 def build_document_list_from_folder(folder_path: str, max_files: int = None) -> tuple[bool, list]:
     """
-    Build a list of documents from a folder path using DirectoryLoader. 
+    Build a list of documents from a folder path by iteratively processing individual files.
 
-    This function will accept the folder path as provided by the user. First, it will check if the path is a valid directory.
-    If it is not, it will return False and an empty list.
+    This function recursively searches through a directory and its subdirectories for supported
+    file types, then processes each file individually using build_document_list_from_file().
+    This approach provides better error handling, progress tracking, and memory management
+    compared to using DirectoryLoader.
 
-    If the path is valid, it will use DirectoryLoader to recursively load all supported files in the directory 
-    and its subdirectories. The DirectoryLoader automatically handles multiple file types including: 
-    PDF, TXT, MD, CSV, HTML, and other formats supported by LangChain.
+    Supported file types: PDF, TXT, MD, CSV, HTML, HTM, JSON, DOCX
 
-    The function will load all documents from the directory tree and return them as a single collection
-    ready for chunking and vectorization.
+    The function processes files in batches and can optionally limit the total number of
+    files processed to avoid overwhelming the system or API quotas.
 
     Args:
         folder_path (str): The path to the folder containing one or more files.
+        max_files (int, optional): Maximum number of files to process. If None, processes all files.
 
     Returns:
         tuple[bool, list]: A tuple containing:
@@ -96,8 +258,8 @@ def build_document_list_from_folder(folder_path: str, max_files: int = None) -> 
         return False, []
     
     try:
-        # Use DirectoryLoader to recursively load all supported documents
-        # Define glob patterns for supported file types
+        # Recursively search for supported file types using glob patterns
+        # Process each file individually for better error handling and control
         glob_patterns = [
             "**/*.pdf", "**/*.txt", "**/*.md", "**/*.csv", 
             "**/*.html", "**/*.htm", "**/*.json", "**/*.docx"
@@ -139,11 +301,11 @@ def build_document_list_from_folder(folder_path: str, max_files: int = None) -> 
                     
                     print(f"Processing batch {batch_idx + 1}/{total_batches} ({len(batch_files)} files)...")
                     
-                    # Process each file individually to avoid memory issues
+                    # Process each file individually for better error handling and control
                     batch_documents = []
                     for file_path in batch_files:
                         try:
-                            # Use the individual file loader for better control
+                            # Use individual file loader for granular control
                             success, file_docs = build_document_list_from_file(str(file_path))
                             if success and file_docs:
                                 batch_documents.extend(file_docs)
@@ -302,8 +464,9 @@ def create_vector_store(
     collection_name: str,
     text_splitter: Literal["recursive", "token"] = "recursive",
     debug: bool = False,
-    max_files: int = None
-    ) -> None:
+    max_files: int = None,
+    aggressive_cleaning: bool = False
+    ) -> bool:
     """
     Provided a file or folder path, this function will create a new vector store in the app data cache directory.
 
@@ -314,16 +477,19 @@ def create_vector_store(
 
     This function will overwrite an existing vector store if the same collection_name and persist_directory already exists.
 
-    There is no return value for this function, but it will register the new vector store in the resigtry file. The calling
-    function should then list all vector stores and the new store will be included in the list, ready to be chosen
-    by the user for further operations.
-
     Args:
         file_or_folder_path (str): The path to the file or folder containing one or more files.
         store_name (str): The human-readable name of the vector store to be created.
         description (str): A description of the vector store.
         collection_name (str): The name of the collection to be created, used by Chroma.
         text_splitter (Literal["recursive", "token"]): The type of text splitter to use. Defaults to "recursive".
+        debug (bool): Whether to enable debug mode.
+        max_files (int): Maximum number of files to process.
+        aggressive_cleaning (bool): If True, use aggressive ASCII-only text cleaning from the start.
+                                  This removes more characters but ensures maximum compatibility.
+        
+    Returns:
+        bool: True if the vector store was created and registered successfully, False otherwise.
     """
     print(f"Creating vector store '{store_name}' from '{file_or_folder_path}'...")
     
@@ -333,13 +499,43 @@ def create_vector_store(
         success, documents = build_document_list(file_or_folder_path, max_files)
     except Exception as e:
         print(f"Error during document loading: {str(e)}")
-        return
+        return False
     
     if not success or not documents:
         print(f"Error: Failed to load documents from '{file_or_folder_path}'. Vector store creation aborted.")
-        return
+        return False
     
     print(f"Loaded {len(documents)} documents successfully.")
+    
+    # Step 1.5: Clean document content to handle Unicode encoding issues
+    print("Step 1.5: Cleaning document content for Unicode compatibility...")
+    try:
+        if aggressive_cleaning:
+            print("Using aggressive cleaning mode (ASCII-only)...")
+            documents = aggressive_text_cleaning(documents)
+        else:
+            documents = clean_document_content(documents)
+        
+        if not documents:
+            print("Error: All documents were filtered out during cleaning process.")
+            return False
+        print(f"Successfully cleaned {len(documents)} documents.")
+    except Exception as e:
+        print(f"Error during document cleaning: {str(e)}")
+        if not aggressive_cleaning:
+            print("Attempting aggressive cleaning as fallback...")
+            try:
+                documents = aggressive_text_cleaning(documents)
+                if documents:
+                    print(f"Successfully cleaned {len(documents)} documents with aggressive mode.")
+                else:
+                    print("Error: All documents were filtered out during aggressive cleaning.")
+                    return False
+            except Exception as aggressive_error:
+                print(f"Aggressive cleaning also failed: {aggressive_error}")
+                print("Proceeding without cleaning - vector store creation may fail due to encoding issues.")
+        else:
+            print("Proceeding without cleaning - vector store creation may fail due to encoding issues.")
     
     # Check if we have too many documents and warn the user
     if len(documents) > 1000:
@@ -380,7 +576,7 @@ def create_vector_store(
             
     except Exception as e:
         print(f"Error: Failed to split documents: {e}")
-        return
+        return False
     
     # Step 4: Set up embeddings using the custom embedding model
     print("Step 4: Setting up embeddings...")
@@ -388,7 +584,7 @@ def create_vector_store(
         embeddings = embedding_model
     except Exception as e:
         print(f"Error: Failed to initialize embeddings: {e}")
-        return
+        return False
     
     # Step 5: Create persist directory
     print("Step 5: Creating persist directory...")
@@ -401,7 +597,7 @@ def create_vector_store(
         print(f"Vector store will be persisted to: {persist_directory}")
     except Exception as e:
         print(f"Error: Failed to create persist directory: {e}")
-        return
+        return False
     
     # Step 6: Create vector store
     print("Step 6: Creating vector store with embeddings...")
@@ -431,8 +627,32 @@ def create_vector_store(
                 batch = texts[start_idx:end_idx]
                 
                 print(f"Processing batch {i+1}/{total_batches} ({len(batch)} chunks)...")
-                vector_store.add_documents(batch)
-                print(f"Completed batch {i+1}/{total_batches}")
+                try:
+                    vector_store.add_documents(batch)
+                    print(f"Completed batch {i+1}/{total_batches}")
+                except UnicodeEncodeError as unicode_error:
+                    print(f"Error: Unicode encoding issue in batch {i+1}/{total_batches}")
+                    print(f"Attempting aggressive text cleaning as fallback...")
+                    
+                    # Try aggressive cleaning on this batch
+                    try:
+                        cleaned_batch = aggressive_text_cleaning(batch)
+                        if cleaned_batch:
+                            vector_store.add_documents(cleaned_batch)
+                            print(f"Successfully processed batch {i+1}/{total_batches} with aggressive cleaning")
+                            continue
+                        else:
+                            print(f"Aggressive cleaning produced no usable content for batch {i+1}")
+                            return False
+                    except Exception as fallback_error:
+                        print(f"Aggressive cleaning also failed: {fallback_error}")
+                        print(f"Error details: {type(fallback_error).__name__}: {str(fallback_error)}")
+                        print(f"Unable to process batch {i+1}/{total_batches}")
+                        return False
+                except Exception as batch_error:
+                    print(f"Error: Failed to process batch {i+1}/{total_batches}: {batch_error}")
+                    print(f"Vector store creation failed.")
+                    return False
         else:
             # Small number of documents, process all at once
             vector_store = Chroma.from_documents(
@@ -444,10 +664,36 @@ def create_vector_store(
         
         print(f"Vector store created successfully!")
         
+    except UnicodeEncodeError as unicode_error:
+        print(f"Error: Unicode encoding issue during vector store creation")
+        print(f"Attempting aggressive text cleaning as fallback...")
+        
+        # Try aggressive cleaning on all documents
+        try:
+            cleaned_texts_aggressive = aggressive_text_cleaning(texts)
+            if cleaned_texts_aggressive:
+                print(f"Retrying vector store creation with {len(cleaned_texts_aggressive)} aggressively cleaned documents...")
+                vector_store = Chroma.from_documents(
+                    documents=cleaned_texts_aggressive,
+                    embedding=embeddings,
+                    collection_name=collection_name,
+                    persist_directory=persist_directory
+                )
+                print(f"Vector store created successfully with aggressive cleaning!")
+            else:
+                print(f"Aggressive cleaning produced no usable content.")
+                return False
+                
+        except Exception as fallback_error:
+            print(f"Aggressive cleaning also failed: {fallback_error}")
+            print(f"Error details: {type(fallback_error).__name__}: {str(fallback_error)}")
+            print(f"Unable to create vector store even with aggressive text cleaning.")
+            print(f"The PDF may have severely corrupted text that cannot be processed.")
+            return False
     except Exception as e:
         print(f"Error: Failed to create vector store: {e}")
         print(f"Error details: {type(e).__name__}: {str(e)}")
-        return
+        return False
     
     # Step 7: Register the vector store in the registry
     print("Registering vector store in registry...")
@@ -468,9 +714,11 @@ def create_vector_store(
         print(f"  - Splitter: {text_splitter}")
         print(f"  - Location: {persist_directory}")
         print("\nVector store is now available for selection in the main application.")
+        return True
     else:
         print(f"Warning: Vector store created but failed to register in registry.")
         print("You may need to manually add it to the registry file.")
+        return False
 
 def get_retriever_from_vector_store(
     collection_name: str,
