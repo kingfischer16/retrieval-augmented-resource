@@ -11,7 +11,7 @@ Basic static configuration for the application, including model names and vector
 # Google Gemini embedding models must use the full path format: "models/model-name"
 # Available options: "models/text-embedding-004", "models/embedding-001"
 GEMINI_EMBEDDING_MODEL_NAME = "models/embedding-001"  # Latest embedding model
-GEMINI_CHAT_MODEL_NAME = "gemini-2.5-flash-lite-preview-06-17"
+GEMINI_CHAT_MODEL_NAME = "gemini-2.5-flash-lite"
 
 # Model options
 CHAT_MODEL_TEMPERATURE = 0.2  # Temperature for the chat model, controlling randomness in responses
