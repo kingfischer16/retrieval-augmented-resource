@@ -426,7 +426,6 @@ def start_chat_session(agent, session_id: str, store_name: str, topic: str):
                 
                 # Clear the "Thinking..." message and print response
                 print(f"\r{' ' * 12}\r", end="")  # Clear the line
-                print("Printing output...")
                 print(f"{Colors.GREEN}[CHAT]{Colors.END} {response['output']}")
                 
             except Exception as e:
